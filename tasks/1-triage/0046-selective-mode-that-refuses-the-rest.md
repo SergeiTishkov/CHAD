@@ -50,8 +50,11 @@ The owner, the same day: with thousands of Selective rules the refusal cannot ca
 It carries a short list, and the agent asks CHAD for the rest through a skill. The channel is a
 control request (SPEC §7): a marker command the hook catches before any rule, answered with a
 `deny` text, so it works in the strict kind and in any harness, and nothing runs.
-- `#chad:find-rules <words>`: the Selective rules that contain those words, all of them, bounded
-  only by the output budget (then "N more, narrow the search").
+- `#chad:find-rules <words>`: the Selective rules that contain those words, in pages of 50
+  (`findRulesPageSize` in config.yaml). The answer says "rules 1-50 of 3000", that a narrower
+  search is the better next step, and how to ask for the next page
+  (`#chad:find-rules --page 2 <words>`). Rules matching more of the words come first, then the
+  list's own order.
 - `#chad:check <command>`: whether that command would run now, which rule covers each statement,
   or which statement no rule covers and why (a redirection, `$(...)`, no rule). The real matcher
   answers, so the agent does not have to guess how `*` and chains are read.
