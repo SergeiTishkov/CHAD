@@ -35,7 +35,10 @@ def _flat(text: str | None) -> str:
 
 
 def _timestamp(now: datetime | None = None) -> str:
-    moment = (now or datetime.now()).astimezone()
+    # A time that carries its zone keeps it; the current time, or one without a zone, is local.
+    moment = (
+        now if now is not None and now.tzinfo is not None else (now or datetime.now()).astimezone()
+    )
     offset = moment.strftime("%z")  # +0400
     return f"{moment:%Y-%m-%d %H:%M:%S} {offset[:3]}:{offset[3:]}"
 

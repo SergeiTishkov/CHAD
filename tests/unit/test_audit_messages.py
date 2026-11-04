@@ -19,6 +19,14 @@ def test_line_format() -> None:
     )
 
 
+def test_a_time_keeps_its_own_zone_whatever_the_local_one() -> None:
+    # Two zones, so at least one differs from the machine's (the CI runner's is UTC).
+    for hours, shown in ((4, "21:04:11 +04:00"), (-7, "21:04:11 -07:00")):
+        moment = datetime(2026, 10, 6, 21, 4, 11, tzinfo=timezone(timedelta(hours=hours)))
+        line = audit.format_line(Decision.ERROR, None, None, None, None, None, moment)
+        assert line.startswith(f"2026-10-06 {shown} | error")
+
+
 def test_missing_fields_and_no_note() -> None:
     line = audit.format_line(Decision.ERROR, None, None, None, None)
     assert line.endswith("| error | - | session=- | cwd=- | cmd=")
