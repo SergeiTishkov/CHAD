@@ -87,6 +87,29 @@ def test_deny_switch_is_independent_of_mode() -> None:
     assert not switches.deny_enabled()
 
 
+def test_selective_switches_are_off_by_default_and_independent_of_mode() -> None:
+    assert not switches.selective_refuses() and not switches.selective_lists()
+    switches.set_selective_refuse(True)
+    switches.set_selective_list(True)
+    for mode in Mode:
+        switches.set_mode(mode)
+        assert switches.selective_refuses() and switches.selective_lists()
+    assert userenv.get(switches.SELECTIVE_REFUSE) == "1"
+    assert userenv.get(switches.SELECTIVE_LIST) == "1"
+    switches.set_selective_refuse(False)
+    switches.set_selective_list(False)
+    assert userenv.get(switches.SELECTIVE_REFUSE) is None
+    assert userenv.get(switches.SELECTIVE_LIST) is None
+
+
+def test_the_selective_description_follows_the_refuse_switch() -> None:
+    assert switches.description(Mode.SELECTIVE) == switches.DESCRIPTIONS[Mode.SELECTIVE]
+    switches.set_selective_refuse(True)
+    assert switches.description(Mode.SELECTIVE) == switches.SELECTIVE_REFUSING
+    for mode in (Mode.CHAD, Mode.ALLOW_ALL, Mode.OFF):
+        assert switches.description(mode) == switches.DESCRIPTIONS[mode]
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="registry backend")
 @pytest.mark.skipif(
     os.environ.get("CHAD_TEST_REGISTRY") != "1",

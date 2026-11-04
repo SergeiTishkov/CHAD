@@ -26,6 +26,10 @@ maxCommandSeconds: 1800
 # Combined stdout and stderr budget returned to the agent.
 maxOutputBytes: 30000
 
+# How many Selective rules one answer to #chad:find-rules lists before it asks for a narrower
+# search or the next page.
+findRulesPageSize: 50
+
 # Start the Electron tray UI together with the dispatcher.
 launchUi: true
 
@@ -43,6 +47,7 @@ class Config:
     ui_command: tuple[str, ...] = ()
     max_command_seconds: int = 1800
     max_output_bytes: int = 30_000
+    find_rules_page_size: int = 50
 
     @property
     def approval_budget_seconds(self) -> float:
@@ -67,6 +72,7 @@ def load(path: Path | None = None) -> Config:
             ui_command=tuple(str(part) for part in command) if isinstance(command, list) else (),
             max_command_seconds=int(data.get("maxCommandSeconds", 1800)),
             max_output_bytes=int(data.get("maxOutputBytes", 30_000)),
+            find_rules_page_size=int(data.get("findRulesPageSize", 50)),
         )
     except (OSError, ValueError, TypeError, yaml.YAMLError):
         return Config()

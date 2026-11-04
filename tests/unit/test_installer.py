@@ -57,11 +57,12 @@ def test_shims() -> None:
     assert shims["chad"] == '#!/bin/sh\nexec "/c/repo/.venv/Scripts/python.exe" -m chad "$@"\n'
 
 
-def test_the_repository_ships_the_three_skills() -> None:
+def test_the_repository_ships_the_four_skills() -> None:
     assert installer.skill_names() == [
         "chad",
         "chad-add-selective-command",
         "chad-allow-deny-list",
+        "chad-selective-rules",
     ]
 
 

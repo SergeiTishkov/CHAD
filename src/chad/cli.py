@@ -24,8 +24,9 @@ MODE_LABELS = {mode: name for name, mode in MODE_NAMES.items()}
 def _status() -> int:
     mode = switches.current_mode()
     print(f"{FULL_NAME}")
-    print(f"Mode:       {MODE_LABELS[mode]} - {switches.DESCRIPTIONS[mode]}")
+    print(f"Mode:       {MODE_LABELS[mode]} - {switches.description(mode)}")
     print(f"Deny list:  {'armed' if switches.deny_enabled() else 'off'}")
+    print(f"Selective:  {_selective_line()}")
     print(f"Data root:  {paths.data_root()}")
     runtime = protocol.read_runtime()
     if runtime and protocol.ping() == runtime.pid:
@@ -40,7 +41,26 @@ def _status() -> int:
 def _mode(name: str) -> int:
     mode = MODE_NAMES[name]
     switches.set_mode(mode)
-    print(f"Mode: {name} - {switches.DESCRIPTIONS[mode]}")
+    print(f"Mode: {name} - {switches.description(mode)}")
+    return 0
+
+
+def _selective_line() -> str:
+    if not switches.selective_refuses():
+        return "other commands go to the harness"
+    shown = "shown to" if switches.selective_lists() else "kept from"
+    return f"other commands are refused; the rules are {shown} the agent"
+
+
+def _selective(setting: str, value: str) -> int:
+    on = value == "on"
+    if setting == "refuse":
+        switches.set_selective_refuse(on)
+    else:
+        switches.set_selective_list(on)
+    print(f"Selective:  {_selective_line()}")
+    if switches.current_mode() is not Mode.SELECTIVE:
+        print("            (applies in Selective mode only: chad mode selective)")
     return 0
 
 
@@ -105,6 +125,12 @@ def parser() -> argparse.ArgumentParser:
     mode.add_argument("mode", choices=list(MODE_NAMES))
     deny = commands.add_parser("deny", help="arm or disarm the deny list")
     deny.add_argument("value", choices=["on", "off"])
+    selective = commands.add_parser(
+        "selective",
+        help="Selective mode: refuse uncovered commands, show the rules to the agent",
+    )
+    selective.add_argument("setting", choices=["refuse", "list"])
+    selective.add_argument("value", choices=["on", "off"])
     commands.add_parser("open", help="show the allow/deny list window")
     commands.add_parser("start", help="start the dispatcher")
     commands.add_parser("stop", help="stop the dispatcher and the UI")
@@ -137,6 +163,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _mode(args.mode)
             case "deny":
                 return _deny(args.value)
+            case "selective":
+                return _selective(args.setting, args.value)
             case "open":
                 return _open()
             case "start":

@@ -14,9 +14,16 @@ from collections.abc import Callable
 from contextlib import suppress
 from typing import Any
 
-from chad import audit, background, messages, paths, switches
-from chad.allowlist import AllowList, AllowListError, Kind
-from chad.analysis import Analysis, Dialect, analyze, dialect_for_tool, words
+from chad import audit, background, lookup, messages, paths, switches
+from chad.allowlist import AllowList, AllowListError, Entry, Kind
+from chad.analysis import (
+    Analysis,
+    Dialect,
+    Statement,
+    analyze,
+    dialect_for_tool,
+    words,
+)
 from chad.approvals import (
     ApprovalQueue,
     Choice,
@@ -104,6 +111,7 @@ class Engine:
         self.budget = config.approval_budget_seconds
         self.max_command_seconds = max(1, config.max_command_seconds)
         self.max_output_bytes = max(2_000, config.max_output_bytes)
+        self.page_size = max(1, config.find_rules_page_size)
         self.allow = allow or AllowList(paths.allow_list_file())
         self.deny = deny or DenyList(paths.deny_list_file())
         self.captures = CaptureStore()
@@ -149,6 +157,9 @@ class Engine:
             return messages.deny(messages.WINDOW_OPENED)
         if call.command.strip().lower() == ADD_SELECTIVE_MARKER:
             return await self._add_selective(call, deadline)
+        request = lookup.parse(call.command)
+        if request is not None:
+            return self._lookup(call, request)
 
         mode = switches.current_mode()
         if mode is Mode.OFF:
@@ -170,6 +181,8 @@ class Engine:
                     deadline,
                     "selectiveRule=" + "; ".join(matched),
                 )
+            if switches.selective_refuses():
+                return self._refuse_outside_selective(call, analysis)
             self.captures.put(
                 call.session_id, call.tool, call.tool_input, call.cwd, call.environment
             )
@@ -223,6 +236,109 @@ class Engine:
                 return None
             matched.append(hit.matched_by or "")
         return matched
+
+    # -- Selective mode that refuses the rest --------------------------------------------------
+
+    def _selective_rules(self) -> list[Entry]:
+        return [e for e in self.allow.entries if e.selective]
+
+    def _uncovered(self, analysis: Analysis, dialect: Dialect) -> list[tuple[Statement, str]]:
+        """The statements no Selective rule covers, each with the reason."""
+        found = []
+        for statement in analysis.statements:
+            if statement.blocking:
+                constructs = ", ".join(statement.blocking)
+                found.append((statement, f"it contains {constructs}, which no rule can allow"))
+            elif not self.allow.match(statement.normalized, dialect, selective_only=True).allowed:
+                found.append((statement, "no Selective rule matches it"))
+        return found
+
+    def _refuse_outside_selective(self, call: _Call, analysis: Analysis) -> dict[str, Any]:
+        uncovered = self._uncovered(analysis, call.dialect)
+        call.audit(
+            Decision.REFUSED_OUTSIDE_SELECTIVE,
+            "uncovered=" + "; ".join(s.text for s, _ in uncovered),
+        )
+        shown = [(s.text, why) for s, why in uncovered]
+        if not switches.selective_lists():
+            return messages.deny(messages.outside_selective(shown, None, None))
+        program = lookup.program_of(uncovered[0][0].normalized, call.dialect) if uncovered else None
+        rules = lookup.for_program(self._selective_rules(), program) if program else []
+        return messages.deny(
+            messages.outside_selective(
+                shown,
+                program,
+                [lookup.shown(e) for e in rules[: lookup.SHORT_LIST]],
+                len(rules),
+            )
+        )
+
+    def _lookup(self, call: _Call, request: lookup.Request) -> dict[str, Any]:
+        """#chad:find-rules and #chad:check; open only while Selective mode refuses and lists."""
+        listing = (
+            switches.current_mode() is Mode.SELECTIVE
+            and switches.selective_refuses()
+            and switches.selective_lists()
+        )
+        if not listing:
+            call.audit(Decision.ERROR, f"{request.kind} request while rule lookup is off")
+            return messages.deny(messages.error(messages.LOOKUP_OFF))
+        if request.kind is lookup.RequestKind.CHECK:
+            return self._check(call, request.text)
+        try:
+            query, number = lookup.read_find(request.text)
+        except lookup.FindError as exc:
+            call.audit(Decision.ERROR, f"find-rules: {exc}")
+            return messages.deny(messages.error(f"{exc} Nothing ran."))
+        page = lookup.find(self._selective_rules(), query, number, self.page_size)
+        call.audit(Decision.RULES_LOOKUP, f"find-rules; matches={page.total}; page={page.number}")
+        return messages.deny(
+            messages.rules_found(
+                query,
+                [lookup.shown(e) for e in page.rules],
+                page.first,
+                page.total,
+                page.number,
+                page.pages,
+                page.has_more,
+            )
+        )
+
+    def _check(self, call: _Call, command: str) -> dict[str, Any]:
+        """Whether a command would run now, by the same rules a real call meets."""
+        analysis = analyze(command, call.dialect)
+        if "\n" in command or "\r" in command:
+            problem = "Put the command to check on the same line as #chad:check; `a && b` works."
+        elif analysis.is_empty:
+            problem = "Put the command to check after #chad:check, on the same line."
+        else:
+            problem = None
+        if problem:
+            call.audit(Decision.ERROR, f"check: {problem}")
+            return messages.deny(messages.error(f"{problem} Nothing ran."))
+        findings = []
+        runs = True
+        for statement in analysis.statements:
+            hit = self.deny.first_match([statement.normalized]) if switches.deny_enabled() else None
+            if hit is not None:
+                findings.append(
+                    f"{statement.text}: on the deny list (rule: {hit[0].words}), refused "
+                    "whatever the allow rules say"
+                )
+            elif statement.blocking:
+                constructs = ", ".join(statement.blocking)
+                findings.append(f"{statement.text}: contains {constructs}, which no rule can allow")
+            else:
+                match = self.allow.match(statement.normalized, call.dialect, selective_only=True)
+                if match.allowed:
+                    rule = match.matched_by or ""
+                    rule = f"exact: {statement.normalized}" if rule == "exact" else rule
+                    findings.append(f"{statement.text}: covered by {rule}")
+                    continue
+                findings.append(f"{statement.text}: no Selective rule matches it")
+            runs = False
+        call.audit(Decision.RULES_LOOKUP, f"check; runs={str(runs).lower()}")
+        return messages.deny(messages.checked(command, findings, runs))
 
     def _pending(
         self,
@@ -547,8 +663,13 @@ class Engine:
         mode = switches.current_mode()
         return {
             "mode": str(mode),
-            "modes": [{"id": str(m), "description": d} for m, d in switches.DESCRIPTIONS.items()],
+            "modes": [
+                {"id": str(m), "description": switches.description(m)}
+                for m in switches.DESCRIPTIONS
+            ],
             "deny": switches.deny_enabled(),
+            "selectiveRefuse": switches.selective_refuses(),
+            "selectiveList": switches.selective_lists(),
             "pending": [item.to_ui() for item in self.queue.items],
             "attentionVersion": self.attention_version,
             "requestedView": self.requested_view,
@@ -604,6 +725,10 @@ class Engine:
                     raise ActionError(f"Unknown mode {request.get('mode')!r}.") from None
             case "setDeny":
                 switches.set_deny(bool(value))
+            case "setSelectiveRefuse":
+                switches.set_selective_refuse(bool(value))
+            case "setSelectiveList":
+                switches.set_selective_list(bool(value))
             case "decide":
                 self.decide(
                     str(request.get("id")),

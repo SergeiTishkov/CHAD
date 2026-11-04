@@ -1,4 +1,4 @@
-import { decisionOf, expect, ranByChad, test, timesRaised } from './fixtures';
+import { decisionOf, expect, ranByChad, reasonOf, test, timesRaised } from './fixtures';
 
 test('a new command raises the window, arms after a moment, and is run once', async ({ app, chad, page }) => {
   const before = await timesRaised(app);
@@ -88,6 +88,44 @@ test('the policy view switches modes and edits both lists', async ({ chad, page 
   await expect(page.getByRole('cell', { name: 'rm -rf', exact: true })).toHaveCount(0);
   await page.getByRole('checkbox', { name: 'Enabled: git reset --hard' }).uncheck();
   await expect.poll(() => chad.readFile('deny-list.yaml')).toContain('enabled: false');
+});
+
+test('the Selective switches show in Selective mode and refuse the rest', async ({ chad, page }) => {
+  await chad.request({ op: 'ui', action: 'addAllow', value: 'git status', selective: true });
+  await chad.request({ op: 'ui', action: 'showPolicy' });
+  const refuse = page.getByRole('checkbox', { name: /Refuse other commands/ });
+  const list = page.getByRole('checkbox', { name: /Show the agent the Selective rules/ });
+  await expect(refuse).toBeHidden();
+  await expect(list).toBeHidden();
+
+  await page.getByRole('radio', { name: /^Selective/ }).check();
+  await expect(refuse).toBeVisible();
+  await expect(refuse).not.toBeChecked();
+  await expect(list).toBeHidden();
+  expect(await chad.hook('git push').result).toEqual({});
+
+  await refuse.check();
+  await expect.poll(() => chad.readFile('user-environment.json')).toContain('CHAD_SELECTIVE_REFUSE');
+  await expect(list).toBeVisible();
+  await expect(page.getByRole('radio', { name: /every other command is refused/ })).toBeChecked();
+  let output = await chad.hook('git push').result;
+  expect(decisionOf(output)).toBe('deny');
+  expect(reasonOf(output)).toContain('CHAD does not show its rules here');
+
+  await list.check();
+  await expect.poll(() => chad.readFile('user-environment.json')).toContain('CHAD_SELECTIVE_LIST_RULES');
+  output = await chad.hook('git push').result;
+  expect(reasonOf(output)).toContain('Selective rules for `git` (1):\n  git status');
+  expect(reasonOf(await chad.hook('#chad:check git status').result)).toContain('WOULD RUN');
+  expect(ranByChad(await chad.hook('git status').result)).toBe(true);
+
+  await page.getByRole('radio', { name: /^CHAD/ }).check();
+  await expect(refuse).toBeHidden();
+  await expect(list).toBeHidden();
+  await page.getByRole('radio', { name: /^Selective/ }).check();
+  await refuse.uncheck();
+  await expect(list).toBeHidden();
+  await expect.poll(() => chad.readFile('user-environment.json')).not.toContain('CHAD_SELECTIVE_REFUSE');
 });
 
 test('the policy marker brings the policy view forward', async ({ chad, page }) => {

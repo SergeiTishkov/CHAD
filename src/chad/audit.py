@@ -21,6 +21,8 @@ class Decision(StrEnum):
     DENIED_BY_RULE = "deniedByRule"
     EXPIRED = "expired"
     HANDED_TO_HARNESS = "handedToHarness"
+    REFUSED_OUTSIDE_SELECTIVE = "refusedOutsideSelective"
+    RULES_LOOKUP = "rulesLookup"
     WINDOW_OPENED = "windowOpened"
     ERROR = "error"
 

@@ -80,6 +80,14 @@ def test_a_control_request_keeps_its_own_refusal(no_dispatcher: None) -> None:
     assert "window could not be opened" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
 
+@pytest.mark.parametrize("command", ["#chad:find-rules git", "#chad:check git status"])
+def test_a_rule_lookup_reaches_for_chad_even_when_off(no_dispatcher: None, command: str) -> None:
+    switches.set_mode(Mode.OFF)
+    reason = hook.decide(payload(command))["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason.startswith("[CHAD] CHAD ERROR.")
+    assert "the Selective rules could not be looked up" in reason
+
+
 @pytest.mark.parametrize("stdin", [b"not json at all", b"", b"[1, 2]"])
 def test_unreadable_input_is_a_deny(stdin: bytes) -> None:
     broken(run_client(stdin))

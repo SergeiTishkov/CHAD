@@ -46,6 +46,10 @@ export interface UiState {
   mode: ModeId;
   modes: { id: ModeId; description: string }[];
   deny: boolean;
+  /** Selective mode refuses what its rules do not cover; ignored in the other modes. */
+  selectiveRefuse: boolean;
+  /** While Selective mode refuses: the agent may see the Selective rules. */
+  selectiveList: boolean;
   pending: PendingView[];
   attentionVersion: number;
   requestedView: 'approval' | 'policy' | null;

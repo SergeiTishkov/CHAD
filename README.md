@@ -30,8 +30,11 @@ Claude Code ──stdin JSON──▶ hook client ──TCP 127.0.0.1 + token─
 - **A deny list above every other rule.** A rule catches any statement that contains all its
   words, in any order: `rm -rf` stops `rm dist -rf` and `bash -c "rm -rf /"` as well.
 - **Modes, switchable live.** Ask (CHAD), allow everything, run only the commands marked
-  Selective and hand the rest to the harness's own approval (Claude Code's prompt today), or
-  switch off - from the window, the CLI or the agent, with nothing restarted.
+  Selective and hand the rest to the harness's own approval (Claude Code's prompt today) or
+  refuse them, or switch off - from the window, the CLI or the agent, with nothing restarted.
+- **A strict allow list, if you want one.** Selective mode can refuse every command its rules do
+  not cover and show the agent which rules there are, so it can find a command that is allowed
+  on its own (see [Selective mode that refuses the rest](#selective-mode-that-refuses-the-rest)).
 - **Fails closed, says why.** If CHAD fails (the dispatcher does not start or answer, its code
   does not load), the command does not run and the agent is told that CHAD is broken and why.
   `chad mode off` in your own terminal hands every command back to the harness until it is
@@ -40,7 +43,8 @@ Claude Code ──stdin JSON──▶ hook client ──TCP 127.0.0.1 + token─
 CHAD runs commands it approves in its own dispatcher: Bash calls use Bash, and PowerShell calls
 use PowerShell. The hook then returns `deny` with the exit code and bounded output, so Claude Code
 does not execute the command a second time. Calls handed back by Off mode or an uncovered
-Selective-mode command still go through Claude Code's normal permission flow.
+Selective-mode command (unless Selective mode refuses those) still go through Claude Code's
+normal permission flow.
 
 The full behaviour is specified in [docs/SPEC.md](docs/SPEC.md).
 
@@ -115,6 +119,8 @@ once so a stale one cannot come back.
 | `CHAD_SELECTIVE_ALLOWLIST` | `chad mode selective` | Selective: commands covered by rules marked Selective go through CHAD; every other command goes to the harness's own approval (Claude Code's prompt). |
 | `CHAD_ALLOW_ALL` | `chad mode allow-all` | Allow all: CHAD runs every command without asking. Nothing is written to the allow list. |
 | `CHAD_DENY` | `chad deny on`, `chad install --deny` | Arms the deny list, in every mode except Off. |
+| `CHAD_SELECTIVE_REFUSE` | `chad selective refuse on` | In Selective mode, a command no Selective rule covers is refused instead of going to the harness. Ignored in the other modes. |
+| `CHAD_SELECTIVE_LIST_RULES` | `chad selective list on` | While Selective mode refuses: the refusal lists the Selective rules for the same program, and `#chad:find-rules` / `#chad:check` answer. Ignored otherwise. |
 | `CHAD_UI_DISABLED` | you | The dispatcher runs without the tray UI. |
 | `CHAD_ISOLATED` | tests | Switches come from `user-environment.json` in `CHAD_HOME` instead of the registry, and `chad install` refuses the real `~/.claude`. |
 | `CHAD_UI_HIDDEN` | tests | The UI never puts its window on screen. |
@@ -124,12 +130,13 @@ None set means mode CHAD. If several mode variables are set, Off wins, then Sele
 Allow all.
 
 `config.yaml` in the data folder holds `hookTimeoutSeconds` (3600, must match the hook entry),
-`safetyMarginSeconds` (30), `maxCommandSeconds` (1800), `maxOutputBytes` (30000), `launchUi`
-and `uiCommand`.
+`safetyMarginSeconds` (30), `maxCommandSeconds` (1800), `maxOutputBytes` (30000),
+`findRulesPageSize` (50, the rules in one answer to `#chad:find-rules`), `launchUi` and
+`uiCommand`.
 
 ## Skills
 
-The `skills/` folder ships three Claude Code skills that teach the agent how to work with CHAD.
+The `skills/` folder ships four Claude Code skills that teach the agent how to work with CHAD.
 `chad install` copies them into `~/.claude/skills/`, so they are available in every project; to
 install them by hand, copy each folder there.
 
@@ -138,8 +145,9 @@ install them by hand, copy each folder there.
 | `chad` | Explains the modes, the deny list and every `[CHAD]` answer; switches modes with `chad mode ...` when you ask. |
 | `chad-allow-deny-list` | Opens the policy window by running the `#chad:allow-deny-list` marker. Works even when CHAD is Off. |
 | `chad-add-selective-command` | User-invoked only (`/chad-add-selective-command`). In Selective mode, after you reject Claude Code's prompt for a command, it opens CHAD's editor to add that command as a Selective rule and then runs it. |
+| `chad-selective-rules` | When Selective mode refuses what its rules do not cover and shows them to the agent: searches the Selective rules with `#chad:find-rules` and tests a command with `#chad:check`. |
 
-The two markers are comments in both shells, so if one ever reaches a real shell it does nothing.
+The markers are comments in both shells, so if one ever reaches a real shell it does nothing.
 
 ## Using it
 
@@ -163,12 +171,65 @@ Edits to the YAML files are picked up live too.
 
 ![The policy window: mode, deny list switch and the allow rules, two of them Selective](docs/images/policy.png)
 
+### Selective mode that refuses the rest
+
+By default, Selective mode runs the commands its Selective rules cover and hands every other
+command to the harness, which asks you. For an agent that should stay inside a fixed set of
+commands, two switches appear under the deny switch once Selective mode is chosen:
+
+- **Refuse other commands** - a command no Selective rule covers is refused instead of going to
+  the harness. Nothing prompts you; the agent is told which statements no rule covers and why.
+- **Show the agent the Selective rules** (only while the first is on) - the refusal also lists
+  up to 20 Selective rules for the same program, and the agent may look up the rest.
+
+![Selective mode with both switches on: four rules are Selective, one is not](docs/images/selective.png)
+
+With both on, a command outside the rules comes back like this:
+
+```
+[CHAD] Refused: no Selective rule covers this command. It did not run.
+CHAD is in Selective Allowlist mode, where it refuses every command its Selective rules do not cover.
+Not covered: git push origin main (no Selective rule matches it)
+Selective rules for `git` (3):
+  git status
+  git log *
+  git diff *
+How the rules read: an exact rule is the whole statement, word for word. In a pattern, `*` stands for one or more whole words, never for a redirection. A regex rule is searched in the statement. Each statement of a chain (`&&`, `||`, `;`, `|`) must match a rule on its own, and a statement with command substitution, eval or a similar construct never matches.
+To look further, send one of these as the whole command; CHAD answers it and runs nothing:
+  #chad:find-rules <words>   the Selective rules that contain any of the words
+  #chad:check <command>      whether that command would run now, and if not, why
+Do not send this command again as it is. Use a command the Selective rules cover, or ask the user to add a rule or to change the mode.
+```
+
+The two lookups are what the `chad-selective-rules` skill teaches:
+
+- `#chad:find-rules [--page N] <words>` lists the Selective rules that contain any of the words,
+  the rules with more of them first, 50 to a page (`findRulesPageSize`). When more match, the
+  answer suggests a narrower search and gives the command for the next page. With no words it
+  lists them all.
+- `#chad:check <command>` says, statement by statement, whether the command would run now:
+
+  ```
+  [CHAD] CHECK: WOULD RUN. This was a request to CHAD; nothing ran.
+  Command: git log --oneline -5 && git status
+  - git log --oneline -5: covered by pattern: git log *
+  - git status: covered by exact: git status
+  To run it, send the command itself, without #chad:check.
+  ```
+
+Neither runs anything, and both answer only while Selective mode refuses and shows its rules;
+otherwise the agent is told to ask you. With the second switch off, the refusal keeps the rules
+to itself. The deny list still comes first in every case, and outside Selective mode both
+switches are ignored.
+
 **CLI**
 
 ```
-chad status                         mode, deny list, dispatcher, pending count
+chad status                         mode, deny list, Selective switches, dispatcher, pending count
 chad mode chad|allow-all|selective|off
 chad deny on|off
+chad selective refuse on|off        Selective mode: refuse uncovered commands, or hand them back
+chad selective list on|off          while refusing: show the agent the Selective rules
 chad open                           show the policy window
 chad start | stop | restart         the dispatcher
 chad install | uninstall            see above
@@ -192,7 +253,8 @@ How CHAD's answers combine with Claude Code's own settings
 - CHAD's **deny** applies in every permission mode, `bypassPermissions` and
   `--dangerously-skip-permissions` included.
 - In **Selective** mode, a command without a Selective rule goes through Claude Code's own
-  permission handling.
+  permission handling, unless Selective mode is set to refuse those; then CHAD refuses it and
+  Claude Code never asks.
 - Hooks fire for tool calls inside subagents too.
 
 The `chad` skill tells the agent that a `[CHAD] COMMAND EXECUTED` denial is intentional, carries

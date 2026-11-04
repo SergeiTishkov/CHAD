@@ -44,3 +44,28 @@ test('policy window', async ({ chad, page }) => {
     clip: { x: 0, y: 0, width, height: Math.ceil(add!.y + add!.height + 12) },
   });
 });
+
+test('selective window', async ({ chad, page }) => {
+  for (const [value, selective] of [
+    ['git status', true],
+    ['git log *', true],
+    ['git diff *', true],
+    ['uv run pytest *', true],
+    ['npm run *', false],
+  ] as const) {
+    await chad.request({ op: 'ui', action: 'addAllow', value, selective });
+  }
+  await chad.request({ op: 'ui', action: 'setDeny', value: true });
+  await chad.request({ op: 'ui', action: 'setMode', mode: 'selective' });
+  await chad.request({ op: 'ui', action: 'setSelectiveRefuse', value: true });
+  await chad.request({ op: 'ui', action: 'setSelectiveList', value: true });
+  await chad.request({ op: 'ui', action: 'showPolicy' });
+  await expect(page.getByRole('checkbox', { name: /Show the agent the Selective rules/ })).toBeChecked();
+  await expect(page.getByRole('cell', { name: 'npm run *', exact: true })).toBeVisible();
+  const add = await page.getByRole('button', { name: 'Add' }).boundingBox();
+  const width = await page.evaluate(() => document.documentElement.clientWidth);
+  await page.screenshot({
+    path: path.join(images, 'selective.png'),
+    clip: { x: 0, y: 0, width, height: Math.ceil(add!.y + add!.height + 12) },
+  });
+});

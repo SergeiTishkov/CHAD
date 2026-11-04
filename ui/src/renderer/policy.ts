@@ -1,4 +1,4 @@
-// The policy view: the mode, the deny switch, and both rule lists.
+// The policy view: the mode, the deny switch, the Selective switches, and both rule lists.
 
 import { MODE_LABELS, type UiRequest, type UiResponse, type UiState } from '../shared/types';
 import { h, toast } from './dom';
@@ -12,6 +12,34 @@ export class PolicyView {
   private tab: Tab = 'allow';
   private readonly modes = h('div', { class: 'modes', role: 'radiogroup', 'aria-label': 'Mode' });
   private readonly denySwitch = h('input', { type: 'checkbox', id: 'deny-switch' });
+  // Shown only in Selective mode; the second only while the first is on.
+  private readonly refuseSwitch = h('input', { type: 'checkbox', id: 'selective-refuse' });
+  private readonly refuseLabel = h(
+    'label',
+    { class: 'deny-switch selective-switch' },
+    this.refuseSwitch,
+    h(
+      'span',
+      {},
+      h('strong', {}, 'Refuse other commands'),
+      ' - a command no Selective rule covers is refused instead of going to the harness',
+    ),
+  );
+  private readonly listSwitch = h('input', { type: 'checkbox', id: 'selective-list' });
+  private readonly listLabel = h(
+    'label',
+    { class: 'deny-switch selective-switch nested' },
+    this.listSwitch,
+    h(
+      'span',
+      {},
+      h('strong', {}, 'Show the agent the Selective rules'),
+      ' - in the refusal, and on request through ',
+      h('code', {}, '#chad:find-rules'),
+      ' and ',
+      h('code', {}, '#chad:check'),
+    ),
+  );
   private readonly tabs = h('div', { class: 'tabs', role: 'tablist' });
   private readonly search = h('input', { type: 'search', placeholder: 'Search', class: 'search' });
   private readonly addInput = h('input', { type: 'text', class: 'add-input' });
@@ -30,6 +58,12 @@ export class PolicyView {
   ) {
     this.denySwitch.addEventListener('change', () =>
       void this.run({ action: 'setDeny', value: this.denySwitch.checked }),
+    );
+    this.refuseSwitch.addEventListener('change', () =>
+      void this.run({ action: 'setSelectiveRefuse', value: this.refuseSwitch.checked }),
+    );
+    this.listSwitch.addEventListener('change', () =>
+      void this.run({ action: 'setSelectiveList', value: this.listSwitch.checked }),
     );
     this.search.addEventListener('input', () => this.renderTable());
     const add = h(
@@ -54,6 +88,8 @@ export class PolicyView {
         this.denySwitch,
         h('span', {}, h('strong', {}, 'Deny list armed'), ' - refuse the commands on the Denied tab in every mode except Off'),
       ),
+      this.refuseLabel,
+      this.listLabel,
       h('div', { class: 'list-bar' }, this.tabs, this.search),
       this.error,
       this.table,
@@ -66,6 +102,10 @@ export class PolicyView {
     this.state = state;
     this.renderModes();
     this.denySwitch.checked = state.deny;
+    this.refuseSwitch.checked = state.selectiveRefuse;
+    this.listSwitch.checked = state.selectiveList;
+    this.refuseLabel.hidden = state.mode !== 'selective';
+    this.listLabel.hidden = state.mode !== 'selective' || !state.selectiveRefuse;
     this.renderTabs();
     // An open editor keeps its row as it is, so typing is not interrupted; the table catches up
     // when it closes. A rule that went away closes it.

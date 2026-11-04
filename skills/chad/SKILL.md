@@ -30,6 +30,8 @@ Claude Code from running the same command a second time.
 | `CHAD COULD NOT RUN THE COMMAND.` | Nothing started. | Pass the reason on to the user; no automatic retry. |
 | `COMMAND REJECTED BY THE USER.` | The user said no, maybe with a reason. | Deal with the reason or ask; do not send the same command again. |
 | `Refused: this command is on the deny list.` | A deny rule matched. | Rules match words regardless of order, so a rephrased command is caught too. Explain to the user what you were trying to do. |
+| `Refused: no Selective rule covers this command.` | Selective mode refuses what its rules do not cover. | Use a covered command; the chad-selective-rules skill looks the rules up. Otherwise tell the user which command you need. |
+| `SELECTIVE RULES.` / `CHECK: ...` | The answer to `#chad:find-rules` or `#chad:check`; nothing ran. | See the chad-selective-rules skill. |
 | `NO DECISION IN TIME.` | Nobody answered before the hook limit. | The user has not seen to it yet; say so instead of retrying. |
 | `CHAD ERROR.` | Nothing ran. | Do what the message says. |
 | `CHAD IS BROKEN.` | CHAD itself failed; nothing ran. | Tell the user the cause. In their own terminal, `chad restart` often helps, and `chad mode off` lets them work without CHAD meanwhile. |
@@ -37,8 +39,8 @@ Claude Code from running the same command a second time.
 Two answers come without the prefix:
 
 - Claude Code shows its own permission prompt: CHAD passed the call back. That happens in Off
-  mode, and in Selective mode for a command no Selective rule covers. Claude Code's own `ask`
-  rules apply to it.
+  mode, and in Selective mode for a command no Selective rule covers (unless the user set
+  Selective mode to refuse those). Claude Code's own `ask` rules apply to it.
 - A refusal with no `[CHAD]` at the start comes from a `deny` rule in Claude Code's settings.
   Name that rule to the user; do not try other phrasings.
 
@@ -54,10 +56,11 @@ next command on; nothing restarts.
 |---|---|---|
 | `chad mode chad` | CHAD (default) | Commands covered by an allow rule run straight away; others wait for the user in CHAD's window. |
 | `chad mode allow-all` | Allow all | Every command runs without a question; the allow list is left untouched. |
-| `chad mode selective` | Selective | Only commands covered by rules ticked Selective run in CHAD; the rest go to Claude Code's prompt. |
+| `chad mode selective` | Selective | Only commands covered by rules ticked Selective run in CHAD; the rest go to Claude Code's prompt, or are refused (see below). |
 | `chad mode off` | Off | CHAD does not take part; Claude Code handles approval alone. |
 
-`chad status` prints the mode, whether the deny list is armed and whether the dispatcher is up.
+`chad status` prints the mode, whether the deny list is armed, what Selective mode does with
+uncovered commands, and whether the dispatcher is up.
 The policy window offers the same four modes at its top (the chad-allow-deny-list skill opens
 it). Use the CLI when the user names a mode; offer the window when they want an overview.
 
@@ -73,6 +76,17 @@ construct whose effect the text does not show (`$(...)`, a redirect to a file, `
 on). Otherwise the whole call goes to Claude Code's prompt, and CHAD keeps it for ten minutes.
 Should the user reject that prompt and want the command as a Selective rule, they run
 `/chad-add-selective-command` themselves. Never start that skill without them.
+
+Two more switches change what happens to the commands no Selective rule covers. The window
+shows them under the deny switch while Selective mode is on, and the CLI sets them:
+
+| Command | Effect |
+|---|---|
+| `chad selective refuse on` | CHAD refuses an uncovered command instead of passing it to Claude Code. The refusal names each uncovered statement and why. |
+| `chad selective list on` | While refusing, the refusal also lists up to 20 Selective rules for the same program, and `#chad:find-rules` and `#chad:check` answer (the chad-selective-rules skill). |
+
+Both are `off` by default, stored as `CHAD_SELECTIVE_REFUSE` and `CHAD_SELECTIVE_LIST_RULES`,
+and ignored outside Selective mode. The deny list still comes first.
 
 ## Deny list
 

@@ -20,14 +20,14 @@ for Claude Code's `Bash` and `PowerShell` tools:
 CHAD executes commands it owns in its dispatcher. Bash calls run in Bash and PowerShell calls
 run in PowerShell. After execution CHAD answers `PreToolUse` with `deny`, carrying the exit code
 and bounded output in the reason so Claude Code does not launch the command a second time.
-Commands CHAD hands back (Off mode or uncovered calls in Selective mode) continue through Claude
-Code's normal permission flow.
+Commands CHAD hands back (Off mode or uncovered calls in Selective mode, unless Selective mode
+refuses them, §4) continue through Claude Code's normal permission flow.
 
 **CHAD never answers `allow`.** It has two answers. **deny**, in Claude Code's terms a refused
 call: the reason says the command was refused and why, or CHAD ran it and here is its result,
 or CHAD could not run it and why, or CHAD itself failed and why. **Skip** (no decision): CHAD
 hands the call back and the harness decides itself; this is for Off mode and, in Selective
-mode, a command no Selective rule covers. This
+mode, a command no Selective rule covers (unless Selective mode refuses those). This
 holds for every mode, path and future change. Refusing with a text and leaving a call alone are
 what every harness's pre-command hook supports, so they give every harness the same behaviour;
 what an `allow` leads to differs between harnesses.
@@ -88,7 +88,7 @@ Output is one of:
   it: why the command was refused, the result of CHAD running it, or why CHAD failed;
 - **no decision**: `{}` — Claude Code continues with its own permission flow. CHAD answers it
   for a tool other than Bash or PowerShell, in Off mode, for an empty command, and in Selective
-  mode for a command no Selective rule covers (§6.3).
+  mode for a command no Selective rule covers while `CHAD_SELECTIVE_REFUSE` is off (§6.3).
 
 Claude Code also accepts `allow`; CHAD never sends it (§1). CHAD-owned calls are executed by the
 dispatcher and returned as `deny`, so Claude Code's `permissions.deny` / `permissions.ask` rules
@@ -125,6 +125,13 @@ including empty, is off.
 | `CHAD_SELECTIVE_ALLOWLIST` | Mode **Selective**: statements covered by rules marked Selective go through CHAD; anything else goes to the harness's own approval. |
 | `CHAD_ALLOW_ALL` | Mode **Allow all**: CHAD runs every command without asking. Nothing is written to the allow list. |
 | `CHAD_DENY` | Deny list armed, whatever the mode; a match is refused even when an allow rule, Allow all or the user would let it run. |
+| `CHAD_SELECTIVE_REFUSE` | Selective mode only: a command no Selective rule covers is refused (§6.3 step 5) instead of going to the harness. |
+| `CHAD_SELECTIVE_LIST_RULES` | Selective mode with `CHAD_SELECTIVE_REFUSE` only: the refusal lists Selective rules, and the rule lookups (§7.3, §7.4) answer. |
+
+The two Selective switches are independent of the mode variables: setting a mode leaves them as
+they are, and outside Selective mode they change nothing. Both default to off, which is
+Selective mode as it was before them. The mode's description in the UI and in `chad status`
+follows `CHAD_SELECTIVE_REFUSE` ("…; every other command is refused").
 
 Exactly one mode applies; when several variables are set by hand the precedence is
 Off > Selective > Allow all > CHAD (the default when none is set).
@@ -296,8 +303,10 @@ For a hook payload whose `tool_name` is `Bash` or `PowerShell` (anything else: n
 3. Empty command (no statements) → no decision.
 4. Deny list armed and a statement matches → **deny**, naming the rule and the statement.
 5. Mode Selective → if every statement has no blocking construct and matches a Selective rule,
-   execute it in CHAD and **deny** with its exit code and output; otherwise capture the call (§7.2)
-   and return no decision. Never asks.
+   execute it in CHAD and **deny** with its exit code and output. Otherwise, with
+   `CHAD_SELECTIVE_REFUSE` off, capture the call (§7.2) and return no decision; with it on,
+   **deny** (`Refused: no Selective rule covers this command`, §12) without capturing it.
+   Never asks.
 6. Mode Allow all → execute in CHAD and **deny** with the result.
 7. Mode CHAD → if every statement has no blocking construct and matches any rule, execute in CHAD
    and **deny** with the result; otherwise queue for approval (§8), run it after approval, and
@@ -337,6 +346,7 @@ call arrives with the same `cwd`. A folder change counts only within one call (`
 | `safetyMarginSeconds` | 30 | The dispatcher answers at least this long before the hook timeout. |
 | `maxCommandSeconds` | 1800 | Upper limit for one command, capped by the remaining CHAD budget. |
 | `maxOutputBytes` | 30000 | Combined stdout and stderr budget returned to the model. |
+| `findRulesPageSize` | 50 | Rules in one answer to `#chad:find-rules` (§7.3); at least 1. |
 | `launchUi` | true | Start the Electron UI with the dispatcher. |
 | `uiCommand` | `[]` | Explicit UI command line (list of strings); see §9.4. |
 
@@ -420,6 +430,47 @@ kept 10 minutes, at most 128 sessions (oldest evicted), taken at most once. The 
    that originally received it and answer **deny** with its exit code and output.
 6. Cancel → **deny** (rejected by the user). Expiry → **deny** (no decision in time).
 
+### 7.3 `#chad:find-rules [--page N] <words>`
+
+The marker counts only at the **start** of the command (after leading space, any case),
+followed by whitespace or the end; the rest of the line is the request. It is answered only
+while the mode is Selective and both `CHAD_SELECTIVE_REFUSE` and `CHAD_SELECTIVE_LIST_RULES`
+are on; otherwise **deny** (error) saying that the lookups are off and to ask the user. Nothing
+runs either way.
+
+The words are matched case-insensitively as substrings of each Selective rule as the agent sees
+it (a regex rule as `regex: <pattern>`). A rule matches when it contains at least one word;
+matches are ordered by the number of words they contain, then by their place in the list. No
+words matches every Selective rule. `--page N` (right after the marker, N ≥ 1) picks the page;
+a page holds `findRulesPageSize` rules. A request on several lines or with a bad `--page` is a
+**deny** (error).
+
+The answer is **deny** with `SELECTIVE RULES. This was a request to CHAD; nothing ran.`, the
+search, `Rules a-b of N:` and the rules, one per line. When more pages follow, it says that a
+narrower search is the better next step and gives the command for the next page. No match and a
+page past the end are said in so many words. The rule-reading note (§12) closes it.
+
+### 7.4 `#chad:check <command>`
+
+Same marker placement and the same gate as §7.3. The command after the marker, on the same line,
+is analysed in the dialect of the tool that sent it and judged statement by statement as a real
+call in Selective mode would be:
+
+- a deny-list match while the deny list is armed: refused, naming the rule;
+- a blocking construct: refused, naming it;
+- a Selective rule that covers it: covered, naming the rule (`exact: …`, `pattern: …`,
+  `regex: …`);
+- otherwise: no Selective rule matches it.
+
+The answer is **deny** with `CHECK: WOULD RUN.` or `CHECK: WOULD BE REFUSED.`, `This was a
+request to CHAD; nothing ran.`, the command, one line per statement, and either "send the
+command itself, without #chad:check" or the rule-reading note and "change the command, or ask
+the user to add a rule". An empty command or one on several lines is a **deny** (error).
+
+Like the other control requests, both lookups reach the dispatcher in mode Off too (where they
+are answered with the "lookups are off" error), and get their own **deny** when it cannot be
+reached.
+
 ## 8. Approval
 
 - Pending commands form a FIFO queue. A command arriving while another is on screen joins the
@@ -467,7 +518,9 @@ kept 10 minutes, at most 128 sessions (oldest evicted), taken at most once. The 
   toggles, a live "Allows: …" preview that turns into an error when it would not cover the
   statement), the context (tool, cwd, session, permission mode), the decision buttons. Deny is
   two-step: the first click reveals a reason box, the second confirms.
-- **Policy**: four mode radio buttons with one-line descriptions; the deny-list switch; tabs
+- **Policy**: four mode radio buttons with one-line descriptions; the deny-list switch; under
+  it, in Selective mode only, *Refuse other commands* (`CHAD_SELECTIVE_REFUSE`) and, only while
+  that is ticked, *Show the agent the Selective rules* (`CHAD_SELECTIVE_LIST_RULES`); tabs
   *Allowed* (kind, rule with an *Edit* button, Selective tick, Delete, drag grip) and *Denied*
   (enabled tick, words, Delete, drag grip); a search box filtering the visible tab; a summary line with counts and the
   file path. Deleting a regex or deny rule asks for confirmation. Dragging an allowed row across
@@ -479,7 +532,8 @@ kept 10 minutes, at most 128 sessions (oldest evicted), taken at most once. The 
 
 ### 9.3 UI actions
 
-`getState`, `setMode {mode}`, `setDeny {value: bool}`, `decide {id, decision, reason?,
+`getState`, `setMode {mode}`, `setDeny {value: bool}`, `setSelectiveRefuse {value: bool}`,
+`setSelectiveList {value: bool}`, `decide {id, decision, reason?,
 selections?}`, `setSelective {key, value}`, `moveAllow {key, index}`, `deleteAllow {key}`,
 `addAllow {value, selective?}`, `editAllow {key, value}`, `setDenyRule {key, value}`, `moveDeny {key, index}`,
 `deleteDeny {key}`, `addDeny {value}`, `showPolicy`,
@@ -522,7 +576,9 @@ VS Code inherits it. The UI is passed `--data-root <path>` and finds the dispatc
 
 Newlines in the command are written as `\n`. Decisions: `allowedByRule`,
 `allowedBySelectiveRule`, `allowOnce`, `allowForever`, `allowSelective`, `allowAllMode`,
-`deniedByUser`, `deniedByRule`, `expired`, `handedToHarness`, `windowOpened`, `error`.
+`deniedByUser`, `deniedByRule`, `expired`, `handedToHarness`, `refusedOutsideSelective`
+(note: the uncovered statements), `rulesLookup` (note: `find-rules; matches=N; page=P` or
+`check; runs=true|false`), `windowOpened`, `error`.
 
 ## 12. Messages to the model
 
@@ -550,8 +606,21 @@ with `[CHAD]`.
   needs fixing) and a `cwd` that does not exist (deleted or moved during the session).
 - Incomplete result: `COMMAND RESULT INCOMPLETE.` + partial output and a warning that the command
   may have run; do not retry it.
-- Window opened / could not be opened; add-selective errors: `CHAD ERROR. The command did not
-  run.` + explanation.
+- Outside the Selective rules (§6.3 step 5, `CHAD_SELECTIVE_REFUSE` on): `Refused: no Selective
+  rule covers this command. It did not run.` + that Selective mode refuses what its rules do not
+  cover + one `Not covered: <statement> (<why>)` line per uncovered statement (no rule matches
+  it, or it contains a construct no rule can allow). With `CHAD_SELECTIVE_LIST_RULES` on: the
+  Selective rules for the program of the first uncovered statement (exact and pattern rules
+  whose first word is that program, regex rules that contain it), at most 20, with the total
+  when there are more; the rule-reading note (an exact rule is the whole statement; `*` is one
+  or more whole words, never a redirection; a regex is searched; each statement of a chain must
+  match; a blocking construct never matches); and the two lookups (§7.3, §7.4). With it off:
+  that CHAD does not show its rules. Always: not to send the command again as it is, but to use
+  a covered command or ask the user.
+- Rule lookups: `SELECTIVE RULES.` (§7.3) and `CHECK: WOULD RUN.` / `CHECK: WOULD BE REFUSED.`
+  (§7.4), each with "This was a request to CHAD; nothing ran."
+- Window opened / could not be opened; add-selective and lookup errors: `CHAD ERROR. The command
+  did not run.` + explanation.
 
 ## 13. CLI
 
@@ -559,9 +628,11 @@ with `[CHAD]`.
 
 | Command | Effect |
 |---|---|
-| `chad status` | Mode, deny list, dispatcher pid/port, data root, pending count. |
+| `chad status` | Mode, deny list, what Selective mode does with uncovered commands, dispatcher pid/port, data root, pending count. |
 | `chad mode chad\|allow-all\|selective\|off` | Writes the mode switches. |
 | `chad deny on\|off` | Writes `CHAD_DENY`. |
+| `chad selective refuse on\|off` | Writes `CHAD_SELECTIVE_REFUSE`; says so when the mode is not Selective. |
+| `chad selective list on\|off` | Writes `CHAD_SELECTIVE_LIST_RULES`; the same note. |
 | `chad open` | Shows the policy window (starts the dispatcher if needed). |
 | `chad start` / `stop` / `restart` | Dispatcher lifecycle. |
 | `chad install` / `uninstall` | §14. |
@@ -590,6 +661,8 @@ Shipped in `skills/`, installed per user:
 - `chad` — modes, deny list, reading CHAD's answers, turning it on/off.
 - `chad-allow-deny-list` — opening the policy window (`#chad:allow-deny-list`).
 - `chad-add-selective-command` — `disable-model-invocation: true`; the §7.2 flow.
+- `chad-selective-rules` — reading a refusal outside the Selective rules and using the lookups
+  of §7.3 and §7.4.
 
 ## 16. Tests
 
@@ -600,6 +673,7 @@ Shipped in `skills/`, installed per user:
   decision path of §6.3, control requests, cold start and concurrent starts, deny when the
   dispatcher cannot start or the hook input cannot be read, expiry, live reload, mode switching through the CLI, install/uninstall
   into a temporary Claude config folder.
-- Electron end-to-end tests (Playwright) run the real UI against a real dispatcher.
+- Electron end-to-end tests (Playwright) run the real UI against a real dispatcher, the
+  Selective switches included.
 - An opt-in test (`CHAD_E2E_CLAUDE=1`) runs real `claude -p` with the hook registered through
   `--settings` and checks allow and deny round trips.

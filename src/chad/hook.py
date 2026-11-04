@@ -17,7 +17,7 @@ import time
 from typing import Any
 
 try:
-    from chad import config, messages, paths, protocol, switches
+    from chad import config, lookup, messages, paths, protocol, switches
     from chad.launcher import ensure_dispatcher
     from chad.policy import ADD_SELECTIVE_MARKER, ALLOW_DENY_LIST_MARKER, TOOLS
     from chad.switches import Mode
@@ -40,6 +40,13 @@ def _control_failure(command: str) -> dict[str, Any] | None:
     if command.strip().lower() == ADD_SELECTIVE_MARKER:
         return messages.deny(
             messages.error("CHAD could not be reached, so nothing was added. Tell the user.")
+        )
+    if lookup.parse(command) is not None:
+        return messages.deny(
+            messages.error(
+                "CHAD could not be reached, so the Selective rules could not be looked up. "
+                "Tell the user."
+            )
         )
     return None
 

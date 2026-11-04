@@ -362,6 +362,19 @@ h2 {
   margin-bottom: 16px;
 }
 
+.deny-switch[hidden] {
+  display: none;
+}
+
+/* The Selective switches sit close under the deny switch; the second one under the first. */
+.selective-switch {
+  margin-top: -8px;
+}
+
+.selective-switch.nested {
+  margin-left: 24px;
+}
+
 .list-bar {
   display: flex;
   align-items: center;

@@ -65,18 +65,22 @@ def only_deny_or_skip(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every answer of every engine in the unit tests is deny, or a skip where one is allowed.
 
     CHAD never answers allow (CLAUDE.md). It skips for a tool it does not handle, in Off mode,
-    for an empty command, and in Selective mode for a command no Selective rule covers.
+    for an empty command, and in Selective mode for a command no Selective rule covers, unless
+    Selective mode refuses those.
     """
     real = policy.Engine.hook
 
     async def checked(self: policy.Engine, payload: dict, environment: object = None) -> dict:
         mode = switches.current_mode()
+        hands_back = mode is Mode.OFF or (
+            mode is Mode.SELECTIVE and not switches.selective_refuses()
+        )
         output = await real(self, payload, environment)
         if output == {}:
             call = policy._Call(payload)
             assert (
                 call.tool not in policy.TOOLS
-                or mode in (Mode.OFF, Mode.SELECTIVE)
+                or hands_back
                 or analyze(call.command, call.dialect).is_empty
             ), f"no decision outside the skip cases: {payload}"
         else:

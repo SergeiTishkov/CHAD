@@ -44,6 +44,25 @@ def test_deny_switch() -> None:
     assert "git reset --hard" in executed(run_hook(payload("echo git reset --hard")))
 
 
+def test_selective_settings() -> None:
+    result = chad("selective", "refuse", "on")
+    assert result.returncode == 0 and switches.selective_refuses()
+    assert "other commands are refused; the rules are kept from the agent" in result.stdout
+    assert "applies in Selective mode only" in result.stdout
+    chad("mode", "selective")
+    result = chad("selective", "list", "on")
+    assert switches.selective_lists()
+    assert "the rules are shown to the agent" in result.stdout
+    assert "applies in Selective mode only" not in result.stdout
+    status = chad("status").stdout
+    assert f"Mode:       selective - {switches.SELECTIVE_REFUSING}" in status
+    assert "Selective:  other commands are refused; the rules are shown to the agent" in status
+    chad("selective", "refuse", "off")
+    assert not switches.selective_refuses()
+    assert "Selective:  other commands go to the harness" in chad("status").stdout
+    assert chad("selective", "refuse", "maybe").returncode == 2
+
+
 def test_start_status_stop() -> None:
     assert "not running" in chad("status").stdout
     assert chad("start").returncode == 0

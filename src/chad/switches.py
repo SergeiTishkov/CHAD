@@ -11,6 +11,10 @@ DISABLED = "CHAD_DISABLED"
 ALLOW_ALL = "CHAD_ALLOW_ALL"
 SELECTIVE = "CHAD_SELECTIVE_ALLOWLIST"
 DENY = "CHAD_DENY"
+# Selective mode only: refuse the commands no Selective rule covers instead of handing them to
+# the harness, and, while refusing, show the agent the Selective rules.
+SELECTIVE_REFUSE = "CHAD_SELECTIVE_REFUSE"
+SELECTIVE_LIST = "CHAD_SELECTIVE_LIST_RULES"
 UI_DISABLED = "CHAD_UI_DISABLED"
 
 
@@ -31,6 +35,14 @@ DESCRIPTIONS = {
     ),
     Mode.OFF: "CHAD is switched off and the harness asks for approval itself.",
 }
+SELECTIVE_REFUSING = "Commands marked Selective go through CHAD; every other command is refused."
+
+
+def description(mode: Mode) -> str:
+    """The mode's one line, as the window and `chad` show it; Selective names what it does now."""
+    if mode is Mode.SELECTIVE and selective_refuses():
+        return SELECTIVE_REFUSING
+    return DESCRIPTIONS[mode]
 
 
 def is_on(name: str) -> bool:
@@ -68,6 +80,24 @@ def deny_enabled() -> bool:
 
 def set_deny(on: bool) -> None:
     userenv.set(DENY, "1" if on else None)
+
+
+def selective_refuses() -> bool:
+    """Whether Selective mode refuses what its rules do not cover; ignored in the other modes."""
+    return is_on(SELECTIVE_REFUSE)
+
+
+def set_selective_refuse(on: bool) -> None:
+    userenv.set(SELECTIVE_REFUSE, "1" if on else None)
+
+
+def selective_lists() -> bool:
+    """Whether a refusal shows the Selective rules; counts only while Selective mode refuses."""
+    return is_on(SELECTIVE_LIST)
+
+
+def set_selective_list(on: bool) -> None:
+    userenv.set(SELECTIVE_LIST, "1" if on else None)
 
 
 def ui_disabled() -> bool:

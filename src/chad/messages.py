@@ -6,6 +6,7 @@ deny reason says what happened and what the model should do next.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,112 @@ def denied_by_rule(rule: str, statement: str) -> str:
         "not look for a way around it: explain to the user what you meant to do, and leave the "
         "choice to them."
     )
+
+
+RULE_READING = (
+    "How the rules read: an exact rule is the whole statement, word for word. In a pattern, `*` "
+    "stands for one or more whole words, never for a redirection. A regex rule is searched in "
+    "the statement. Each statement of a chain (`&&`, `||`, `;`, `|`) must match a rule on its "
+    "own, and a statement with command substitution, eval or a similar construct never matches."
+)
+
+LOOKUP_HINT = (
+    "To look further, send one of these as the whole command; CHAD answers it and runs nothing:\n"
+    "  #chad:find-rules <words>   the Selective rules that contain any of the words\n"
+    "  #chad:check <command>      whether that command would run now, and if not, why"
+)
+
+
+def outside_selective(
+    uncovered: Sequence[tuple[str, str]],
+    program: str | None,
+    rules: Sequence[str] | None,
+    total: int = 0,
+) -> str:
+    """Selective mode refuses what its rules do not cover. `rules` is None when the user keeps
+    the rules from the agent; otherwise the rules for `program`, of `total` such rules."""
+    lines = [
+        f"{PREFIX} Refused: no Selective rule covers this command. It did not run.",
+        "CHAD is in Selective Allowlist mode, where it refuses every command its Selective rules "
+        "do not cover.",
+    ]
+    lines.extend(f"Not covered: {text} ({why})" for text, why in uncovered)
+    if rules is None:
+        lines.append(
+            "CHAD does not show its rules here. Ask the user which commands are allowed, or to "
+            "add a rule."
+        )
+    else:
+        name = f"`{program}`" if program else "this program"
+        if not total:
+            lines.append(f"No Selective rule is for {name}.")
+        else:
+            shown = f"{len(rules)} of {total}" if len(rules) < total else str(total)
+            lines.append(f"Selective rules for {name} ({shown}):")
+            lines.extend(f"  {rule}" for rule in rules)
+        lines.extend((RULE_READING, LOOKUP_HINT))
+    lines.append(
+        "Do not send this command again as it is. Use a command the Selective rules cover, or "
+        "ask the user to add a rule or to change the mode."
+    )
+    return "\n".join(lines)
+
+
+def rules_found(
+    query: Sequence[str],
+    rules: Sequence[str],
+    first: int,
+    total: int,
+    page: int,
+    pages: int,
+    has_more: bool,
+) -> str:
+    """The answer to #chad:find-rules: one page of the Selective rules that matched."""
+    searched = " ".join(query)
+    lines = [
+        f"{PREFIX} SELECTIVE RULES. This was a request to CHAD; nothing ran.",
+        f"Search: {searched}" if searched else "Search: every Selective rule",
+    ]
+    if not total:
+        lines.append(
+            "No Selective rule contains any of these words. Try other words, or ask the user to "
+            "add a rule."
+        )
+    elif not rules:
+        lines.append(f"Page {page} is past the end: {total} rules match, on {pages} page(s).")
+    else:
+        lines.append(f"Rules {first + 1}-{first + len(rules)} of {total}:")
+        lines.extend(f"  {rule}" for rule in rules)
+        if has_more:
+            command = " ".join(("#chad:find-rules", "--page", str(page + 1), *query))
+            lines.append(
+                "More rules match. A narrower search is the better next step; the next page is "
+                f"`{command}`."
+            )
+    lines.append(RULE_READING)
+    return "\n".join(lines)
+
+
+def checked(command: str, findings: Sequence[str], runs: bool) -> str:
+    """The answer to #chad:check: whether the command would run now, statement by statement."""
+    verdict = "WOULD RUN" if runs else "WOULD BE REFUSED"
+    lines = [
+        f"{PREFIX} CHECK: {verdict}. This was a request to CHAD; nothing ran.",
+        f"Command: {command}",
+        *(f"- {finding}" for finding in findings),
+    ]
+    if runs:
+        lines.append("To run it, send the command itself, without #chad:check.")
+    else:
+        lines.extend((RULE_READING, "Change the command, or ask the user to add a rule."))
+    return "\n".join(lines)
+
+
+LOOKUP_OFF = (
+    "#chad:find-rules and #chad:check answer only while CHAD is in Selective Allowlist mode, "
+    "refuses the commands its Selective rules do not cover, and shows those rules to the agent. "
+    "That is not the case now. Nothing ran. Ask the user which commands are allowed."
+)
 
 
 def expired() -> str:

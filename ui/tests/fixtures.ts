@@ -146,6 +146,10 @@ export function decisionOf(output: any): string | undefined {
   return output?.hookSpecificOutput?.permissionDecision;
 }
 
+export function reasonOf(output: any): string {
+  return output?.hookSpecificOutput?.permissionDecisionReason ?? '';
+}
+
 /** CHAD never answers allow: an allowed command is run by CHAD and answered deny with its output. */
 export function ranByChad(output: any): boolean {
   const reason: string = output?.hookSpecificOutput?.permissionDecisionReason ?? '';

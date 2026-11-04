@@ -61,6 +61,13 @@ def test_every_model_message_is_prefixed() -> None:
         reason_of(messages.execution_failed("why")),
         reason_of(messages.execution_budget_expired()),
         reason_of(messages.executed(result(stdout=b"out"), 100_000)),
+        messages.outside_selective([("git push", "no Selective rule matches it")], None, None),
+        messages.outside_selective([("git push", "why")], "git", ["git status"], 1),
+        messages.rules_found(("git",), ["git status"], 0, 1, 1, 1, False),
+        messages.rules_found(("git",), [], 0, 0, 1, 1, False),
+        messages.checked("git status", ["git status: covered by exact: git status"], True),
+        messages.checked("make", ["make: no Selective rule matches it"], False),
+        messages.error(messages.LOOKUP_OFF),
     ]
     assert all(t.startswith("[CHAD] ") for t in texts)
     assert "No reason was given." in texts[0]
