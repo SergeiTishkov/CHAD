@@ -1,0 +1,39 @@
+{
+  "name": "chad-ui",
+  "productName": "CHAD",
+  "version": "0.1.0",
+  "description": "CHAD's approval and policy window, running from the system tray",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
+    "build": "tsc -p tsconfig.main.json && vite build",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "npm run build && electron .",
+    "test": "npm run build && playwright test",
+    "package": "npm run build && electron-builder --dir"
+  },
+  "build": {
+    "appId": "dev.chad.ui",
+    "productName": "CHAD",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "dir"
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.5",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "typescript": "5.9.3",
+    "vite": "8.3.2"
+  }
+}

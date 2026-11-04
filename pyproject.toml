@@ -1,0 +1,47 @@
+[project]
+name = "chad"
+version = "0.1.0"
+description = "CHAD - Cross Harness Allow/Deny: desktop approval for Claude Code shell commands"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sergei Tishkov" }]
+keywords = ["claude-code", "hooks", "permissions", "allowlist", "shell"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+dependencies = ["PyYAML>=6.0"]
+
+[project.scripts]
+chad = "chad.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chad"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "claude: runs the real Claude Code CLI (opt-in with CHAD_E2E_CLAUDE=1)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
