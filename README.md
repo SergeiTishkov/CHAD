@@ -1,7 +1,12 @@
 # CHAD - Cross Harness Allow/Deny
 
-A desktop approval layer for the shell commands an AI coding agent runs. CHAD sits in front of
-[Claude Code](https://code.claude.com/docs)'s `Bash` and `PowerShell` tools as a
+A desktop approval layer for the shell commands an AI coding agent runs. Today CHAD works with
+[Claude Code](https://code.claude.com/docs) only, but the idea is not tied to it: any agent
+harness with a pre-command hook that can refuse a call with a message for the model could use the
+same lists and the same window through a small adapter (see
+[the possible extensions](#possible-extension-a-policy-set-by-an-administrator), item 5).
+
+In Claude Code, CHAD sits in front of the `Bash` and `PowerShell` tools as a
 `PreToolUse` hook: commands you have allowed run without a prompt, commands on the deny list are
 refused, and anything new is put in front of you in a tray window, where one click can also turn
 it into a reusable rule.
