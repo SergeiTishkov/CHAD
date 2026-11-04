@@ -84,5 +84,5 @@ export const MODE_LABELS: Record<ModeId, string> = {
   chad: 'CHAD',
   allowAll: 'Allow all',
   selective: 'Selective Allowlist',
-  off: 'Off - Claude Code decides',
+  off: 'Off - the harness decides',
 };

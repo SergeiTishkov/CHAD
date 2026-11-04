@@ -15,7 +15,7 @@ for Claude Code's `Bash` and `PowerShell` tools:
   answer, and a word-tile editor that turns "allow this one command" into "allow this shape of
   command";
 - four **modes** answering "who decides": CHAD asks, CHAD allows everything, only Selective rules
-  run through CHAD, or CHAD steps aside and Claude Code decides.
+  run through CHAD, or CHAD steps aside and the harness decides.
 
 CHAD executes commands it owns in its dispatcher. Bash calls run in Bash and PowerShell calls
 run in PowerShell. After execution CHAD answers `PreToolUse` with `deny`, carrying the exit code
@@ -121,8 +121,8 @@ including empty, is off.
 
 | Variable | Effect |
 |---|---|
-| `CHAD_DISABLED` | Mode **Off**: the hook client returns no decision without contacting the dispatcher. Claude Code decides. |
-| `CHAD_SELECTIVE_ALLOWLIST` | Mode **Selective**: CHAD runs statements covered by Selective rules; anything else goes to Claude Code. |
+| `CHAD_DISABLED` | Mode **Off**: the hook client returns no decision without contacting the dispatcher. The harness decides. |
+| `CHAD_SELECTIVE_ALLOWLIST` | Mode **Selective**: statements covered by rules marked Selective go through CHAD; anything else goes to the harness's own approval. |
 | `CHAD_ALLOW_ALL` | Mode **Allow all**: CHAD runs every command without asking. Nothing is written to the allow list. |
 | `CHAD_DENY` | Deny list armed, whatever the mode; a match is refused even when an allow rule, Allow all or the user would let it run. |
 

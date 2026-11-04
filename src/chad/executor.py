@@ -307,7 +307,7 @@ def _bash_executable() -> str:
             return found
 
     raise FileNotFoundError(
-        "Claude Code called Bash, but CHAD could not find bash. Set "
+        "The harness called Bash, but CHAD could not find bash. Set "
         "CLAUDE_CODE_GIT_BASH_PATH or add Bash to PATH; the command did not run."
     )
 
@@ -352,7 +352,7 @@ def _working_directory(candidate: str) -> str:
     """The folder the call names; there is no fallback, a command runs where it was meant to."""
     if not candidate:
         raise FileNotFoundError(
-            "The call carried no working folder: the hook payload has no cwd. Claude Code sends "
+            "The call carried no working folder: the hook payload has no cwd. The harness sends "
             "one with every call, so either its hook format changed or CHAD's hook client is "
             "broken. CHAD needs fixing before it can run commands."
         )

@@ -12,11 +12,11 @@ from chad import atomic, paths
 TEMPLATE = """\
 # CHAD settings. CHAD writes this file with the defaults when it does not exist.
 
-# Must equal the "timeout" registered for the CHAD hook in ~/.claude/settings.json.
+# Must equal the "timeout" the harness has registered for the CHAD hook.
 # `chad install` writes the hook with this value.
 hookTimeoutSeconds: 3600
 
-# The dispatcher answers at least this long before the hook timeout runs out, so Claude Code
+# The dispatcher answers at least this long before the hook timeout runs out, so the harness
 # always gets CHAD's decision rather than a timed-out hook.
 safetyMarginSeconds: 30
 

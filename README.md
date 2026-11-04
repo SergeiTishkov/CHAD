@@ -29,12 +29,12 @@ Claude Code ──stdin JSON──▶ hook client ──TCP 127.0.0.1 + token─
   literal text.
 - **A deny list above every other rule.** A rule catches any statement that contains all its
   words, in any order: `rm -rf` stops `rm dist -rf` and `bash -c "rm -rf /"` as well.
-- **Modes, switchable live.** Ask (CHAD), allow everything, allow only a curated Selective set
-  and hand the rest to Claude Code, or switch off - from the window, the CLI or the agent, with
-  nothing restarted.
+- **Modes, switchable live.** Ask (CHAD), allow everything, run only the commands marked
+  Selective and hand the rest to the harness's own approval (Claude Code's prompt today), or
+  switch off - from the window, the CLI or the agent, with nothing restarted.
 - **Fails closed, says why.** If CHAD fails (the dispatcher does not start or answer, its code
   does not load), the command does not run and the agent is told that CHAD is broken and why.
-  `chad mode off` in your own terminal hands every command back to Claude Code until it is
+  `chad mode off` in your own terminal hands every command back to the harness until it is
   fixed.
 
 CHAD runs commands it approves in its own dispatcher: Bash calls use Bash, and PowerShell calls
@@ -111,8 +111,8 @@ once so a stale one cannot come back.
 | Variable | Set by | Effect |
 |---|---|---|
 | `CHAD_HOME` | `chad install` | Data folder. Default `%LOCALAPPDATA%\CHAD` (`$XDG_STATE_HOME/chad` elsewhere). |
-| `CHAD_DISABLED` | `chad mode off` | Off: the hook steps aside and Claude Code asks for approval itself. |
-| `CHAD_SELECTIVE_ALLOWLIST` | `chad mode selective` | Selective: CHAD runs only commands covered by Selective rules; everything else goes to Claude Code's prompt. |
+| `CHAD_DISABLED` | `chad mode off` | Off: the hook steps aside and the harness (Claude Code today) asks for approval itself. |
+| `CHAD_SELECTIVE_ALLOWLIST` | `chad mode selective` | Selective: commands covered by rules marked Selective go through CHAD; every other command goes to the harness's own approval (Claude Code's prompt). |
 | `CHAD_ALLOW_ALL` | `chad mode allow-all` | Allow all: CHAD runs every command without asking. Nothing is written to the allow list. |
 | `CHAD_DENY` | `chad deny on`, `chad install --deny` | Arms the deny list, in every mode except Off. |
 | `CHAD_UI_DISABLED` | you | The dispatcher runs without the tray UI. |

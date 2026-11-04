@@ -266,7 +266,7 @@ def install(options: Options, say: Callable[[str], None] = print) -> None:
         say("Autostart: the dispatcher starts at logon")
     else:
         set_autostart(None)
-    say("Done. Restart Claude Code so it picks up the hook.")
+    say("Done. Restart the harness so it picks up the hook.")
 
 
 def uninstall(options: Options, say: Callable[[str], None] = print) -> None:

@@ -26,8 +26,10 @@ class Mode(StrEnum):
 DESCRIPTIONS = {
     Mode.CHAD: "CHAD runs matching allow rules; new commands wait for your approval.",
     Mode.ALLOW_ALL: "CHAD runs every command without asking; the allow list is unchanged.",
-    Mode.SELECTIVE: "CHAD runs Selective rules; every other command goes to Claude Code.",
-    Mode.OFF: "CHAD is switched off and Claude Code asks for approval itself.",
+    Mode.SELECTIVE: (
+        "Commands marked Selective go through CHAD; the rest go to the harness's own approval."
+    ),
+    Mode.OFF: "CHAD is switched off and the harness asks for approval itself.",
 }
 
 

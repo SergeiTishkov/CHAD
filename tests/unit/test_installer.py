@@ -93,7 +93,7 @@ def test_install_and_uninstall(options: Options) -> None:
     assert switches.deny_enabled()
     assert installer.get_autostart().endswith("-m chad.dispatcher")
     assert paths.allow_list_file().is_file() and paths.deny_list_file().is_file()
-    assert any("Restart Claude Code" in line for line in lines)
+    assert any("Restart the harness" in line for line in lines)
 
     # Running it again changes nothing that matters and leaves one hook.
     installer.install(options, lambda _: None)

@@ -124,7 +124,7 @@ def executed(result: ExecutionResult, max_output_bytes: int) -> dict[str, Any]:
 
     lines = [
         heading,
-        'Claude Code marks this call "denied" intentionally; CHAD owns this execution.',
+        'The harness marks this call "denied" intentionally; CHAD owns this execution.',
     ]
     if result.execution_note:
         lines.append(
@@ -170,12 +170,12 @@ def started_in_background(pid: int, log: str, stop: str) -> dict[str, Any]:
     """A call that asked to run in the background: CHAD started it and did not wait."""
     lines = (
         f"{PREFIX} COMMAND STARTED IN THE BACKGROUND. Process id: {pid}.",
-        'Claude Code marks this call "denied" intentionally; CHAD owns this execution.',
+        'The harness marks this call "denied" intentionally; CHAD owns this execution.',
         "CHAD started the command and did not wait for it. Do not start it again.",
         f"Its stdout and stderr go to this file, which grows while it runs: {log}",
         "Read that file for its output. When the command exits, CHAD adds a last line: "
         '"[CHAD] The command exited with code N."',
-        "Claude Code's own tools for background shells do not know this process.",
+        "The harness's own tools for background shells do not know this process.",
         "The stop command below ends the command and the processes Windows records as its "
         "children. A program started by a compound Bash command (`a; b`, `a && b`) can keep "
         "running after it: check with `tasklist` and stop that one by its own process id.",
@@ -204,7 +204,7 @@ NOT_SELECTIVE = error(
 )
 
 NOTHING_CAPTURED = error(
-    "There is no recent command to add: CHAD has not passed a command to Claude Code's prompt "
-    "lately. Tell the user to say no to Claude Code's prompt for the command first, then start "
-    "/chad-add-selective-command again."
+    "There is no recent command to add: CHAD has not passed a command to the harness's own "
+    "approval prompt lately. Tell the user to say no to that prompt for the command first, then "
+    "start /chad-add-selective-command again."
 )
